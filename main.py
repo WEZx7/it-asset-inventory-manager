@@ -10,6 +10,15 @@ def current_timestamp():
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
 
+def add_history(asset, action):
+    asset.setdefault("history", [])
+
+    asset["history"].append({
+        "timestamp": current_timestamp(),
+        "action": action
+    })
+
+
 def load_assets():
     if not os.path.exists(ASSETS_FILE):
         return []
@@ -31,6 +40,7 @@ def load_assets():
             asset.setdefault("assigned_at", "")
             asset.setdefault("returned_at", "")
             asset.setdefault("retired_at", "")
+            asset.setdefault("history", [])
 
         return loaded_assets
 
@@ -153,8 +163,11 @@ def add_asset():
         "updated_at": timestamp,
         "assigned_at": "",
         "returned_at": "",
-        "retired_at": ""
+        "retired_at": "",
+        "history": []
     }
+
+    add_history(asset, "Asset added to inventory")
 
     assets.append(asset)
     save_assets()
@@ -267,6 +280,8 @@ def assign_asset():
     asset["returned_at"] = ""
     asset["updated_at"] = timestamp
 
+    add_history(asset, f"Assigned to {user} - {department}")
+
     save_assets()
 
     print(f"\nAsset {asset['asset_id']} assigned to {user} successfully.")
@@ -297,6 +312,7 @@ def return_asset():
         return
 
     previous_user = asset.get("assigned_user", "Unknown")
+    previous_department = asset.get("department", "Unknown")
 
     print(f"\nAsset: {asset['asset_id']}")
     print(f"Assigned User: {previous_user}")
@@ -314,6 +330,8 @@ def return_asset():
     asset["status"] = "Available"
     asset["returned_at"] = timestamp
     asset["updated_at"] = timestamp
+
+    add_history(asset, f"Returned from {previous_user} - {previous_department}")
 
     save_assets()
 
@@ -352,33 +370,41 @@ def update_asset():
         print("\nAnother asset already uses this serial number.")
         return
 
-    changes = False
+    changes = []
 
     if new_type and new_type != asset.get("type"):
+        old_value = asset.get("type", "Unknown")
         asset["type"] = new_type
-        changes = True
+        changes.append(f"Type changed from {old_value} to {new_type}")
 
     if new_brand and new_brand != asset.get("brand"):
+        old_value = asset.get("brand", "Unknown")
         asset["brand"] = new_brand
-        changes = True
+        changes.append(f"Brand changed from {old_value} to {new_brand}")
 
     if new_model and new_model != asset.get("model"):
+        old_value = asset.get("model", "Unknown")
         asset["model"] = new_model
-        changes = True
+        changes.append(f"Model changed from {old_value} to {new_model}")
 
     if new_serial and new_serial != asset.get("serial_number"):
+        old_value = asset.get("serial_number", "Unknown")
         asset["serial_number"] = new_serial
-        changes = True
+        changes.append(f"Serial number changed from {old_value} to {new_serial}")
 
     if new_location and new_location != asset.get("location"):
+        old_value = asset.get("location", "Unknown")
         asset["location"] = new_location
-        changes = True
+        changes.append(f"Location changed from {old_value} to {new_location}")
 
     if not changes:
         print("\nNo changes were made.")
         return
 
     asset["updated_at"] = current_timestamp()
+
+    for change in changes:
+        add_history(asset, change)
 
     save_assets()
 
@@ -415,6 +441,11 @@ def retire_asset():
     print(f"Serial Number: {asset.get('serial_number', '')}")
     print(f"Current Status: {asset.get('status', 'Available')}")
 
+    reason = input("Retirement reason: ").strip()
+
+    if not reason:
+        reason = "No reason provided"
+
     confirm = input("Retire this asset? (yes/no): ").strip().lower()
 
     if confirm not in ["yes", "y"]:
@@ -428,6 +459,8 @@ def retire_asset():
     asset["department"] = "Unassigned"
     asset["retired_at"] = timestamp
     asset["updated_at"] = timestamp
+
+    add_history(asset, f"Asset retired - Reason: {reason}")
 
     save_assets()
 
@@ -541,7 +574,6 @@ def asset_statistics():
     available_count = 0
     in_use_count = 0
     retired_count = 0
-
     assigned_count = 0
     unassigned_count = 0
 
@@ -603,13 +635,48 @@ def asset_statistics():
             print(f"{department}: {count}")
 
     active_assets = available_count + in_use_count
+    active_percentage = (active_assets / total_assets) * 100
+    utilization_rate = (in_use_count / total_assets) * 100
 
-    if total_assets > 0:
-        active_percentage = (active_assets / total_assets) * 100
-        utilization_rate = (in_use_count / total_assets) * 100
+    print(f"\nActive Asset Rate: {active_percentage:.1f}%")
+    print(f"Asset Utilization Rate: {utilization_rate:.1f}%")
 
-        print(f"\nActive Asset Rate: {active_percentage:.1f}%")
-        print(f"Asset Utilization Rate: {utilization_rate:.1f}%")
+
+def view_asset_history():
+    print("\n================================")
+    print("          ASSET HISTORY")
+    print("================================")
+
+    if not assets:
+        print("\nNo assets available.")
+        return
+
+    asset_id = input("Enter Asset ID: ").strip()
+    asset = find_asset(asset_id)
+
+    if asset is None:
+        print("\nAsset not found.")
+        return
+
+    print(f"\nAsset ID: {asset['asset_id']}")
+    print(f"Device: {asset.get('brand', '')} {asset.get('model', '')}")
+    print(f"Serial Number: {asset.get('serial_number', '')}")
+    print(f"Current Status: {asset.get('status', 'Unknown')}")
+
+    history = asset.get("history", [])
+
+    if not history:
+        print("\nNo activity history available for this asset.")
+        print("History tracking begins after this feature was added.")
+        return
+
+    print("\nActivity History:")
+
+    for entry in history:
+        timestamp = entry.get("timestamp", "Unknown")
+        action = entry.get("action", "Unknown activity")
+
+        print(f"[{timestamp}] {action}")
 
 
 assets = load_assets()
@@ -629,7 +696,8 @@ def main():
         print("7. Retire Asset")
         print("8. Filter Assets")
         print("9. Asset Statistics")
-        print("10. Exit")
+        print("10. View Asset History")
+        print("11. Exit")
 
         choice = input("\nSelect an option: ").strip()
 
@@ -661,11 +729,14 @@ def main():
             asset_statistics()
 
         elif choice == "10":
+            view_asset_history()
+
+        elif choice == "11":
             print("\nExiting IT Asset Manager...")
             break
 
         else:
-            print("\nInvalid option. Please select 1-10.")
+            print("\nInvalid option. Please select 1-11.")
 
 
 if __name__ == "__main__":
