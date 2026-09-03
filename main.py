@@ -30,6 +30,7 @@ def load_assets():
             asset.setdefault("updated_at", "Unknown")
             asset.setdefault("assigned_at", "")
             asset.setdefault("returned_at", "")
+            asset.setdefault("retired_at", "")
 
         return loaded_assets
 
@@ -77,6 +78,17 @@ def find_asset(asset_id):
     return None
 
 
+def serial_exists(serial_number, current_asset=None):
+    for asset in assets:
+        if asset is current_asset:
+            continue
+
+        if asset.get("serial_number", "").lower() == serial_number.lower():
+            return True
+
+    return False
+
+
 def add_asset():
     print("\n================================")
     print("           ADD ASSET")
@@ -96,12 +108,9 @@ def add_asset():
         print("\nSerial number cannot be empty.")
         return
 
-    for asset in assets:
-        existing_serial = asset.get("serial_number", "")
-
-        if existing_serial.lower() == serial_number.lower():
-            print("\nAn asset with this serial number already exists.")
-            return
+    if serial_exists(serial_number):
+        print("\nAn asset with this serial number already exists.")
+        return
 
     timestamp = current_timestamp()
 
@@ -118,7 +127,8 @@ def add_asset():
         "created_at": timestamp,
         "updated_at": timestamp,
         "assigned_at": "",
-        "returned_at": ""
+        "returned_at": "",
+        "retired_at": ""
     }
 
     assets.append(asset)
@@ -146,6 +156,9 @@ def display_asset(asset):
     if asset.get("returned_at"):
         print(f"Last Returned: {asset['returned_at']}")
 
+    if asset.get("retired_at"):
+        print(f"Retired At: {asset['retired_at']}")
+
     print(f"Last Updated: {asset.get('updated_at', 'Unknown')}")
 
 
@@ -171,9 +184,7 @@ def search_assets():
         print("\nNo assets available.")
         return
 
-    search_term = input(
-        "Enter Asset ID, serial number, brand, model, user, or type: "
-    ).strip().lower()
+    search_term = input("Enter Asset ID, serial number, brand, model, user, or type: ").strip().lower()
 
     if not search_term:
         print("\nSearch cannot be empty.")
@@ -304,6 +315,108 @@ def return_asset():
     print(f"Previous User: {previous_user}")
 
 
+def update_asset():
+    print("\n================================")
+    print("          UPDATE ASSET")
+    print("================================")
+
+    if not assets:
+        print("\nNo assets available.")
+        return
+
+    asset_id = input("Enter Asset ID: ").strip()
+    asset = find_asset(asset_id)
+
+    if asset is None:
+        print("\nAsset not found.")
+        return
+
+    print("\nCurrent Asset Information:")
+    display_asset(asset)
+
+    print("\nLeave a field blank to keep the current value.")
+
+    new_type = input(f"Asset Type [{asset.get('type', '')}]: ").strip()
+    new_brand = input(f"Brand [{asset.get('brand', '')}]: ").strip()
+    new_model = input(f"Model [{asset.get('model', '')}]: ").strip()
+    new_serial = input(f"Serial Number [{asset.get('serial_number', '')}]: ").strip()
+    new_location = input(f"Location [{asset.get('location', '')}]: ").strip()
+
+    if new_serial and serial_exists(new_serial, asset):
+        print("\nAnother asset already uses this serial number.")
+        return
+
+    if new_type:
+        asset["type"] = new_type
+
+    if new_brand:
+        asset["brand"] = new_brand
+
+    if new_model:
+        asset["model"] = new_model
+
+    if new_serial:
+        asset["serial_number"] = new_serial
+
+    if new_location:
+        asset["location"] = new_location
+
+    asset["updated_at"] = current_timestamp()
+
+    save_assets()
+
+    print(f"\nAsset {asset['asset_id']} updated successfully.")
+
+
+def retire_asset():
+    print("\n================================")
+    print("          RETIRE ASSET")
+    print("================================")
+
+    if not assets:
+        print("\nNo assets available.")
+        return
+
+    asset_id = input("Enter Asset ID: ").strip()
+    asset = find_asset(asset_id)
+
+    if asset is None:
+        print("\nAsset not found.")
+        return
+
+    if asset.get("status") == "Retired":
+        print(f"\nAsset {asset['asset_id']} is already retired.")
+        return
+
+    if asset.get("status") == "In Use":
+        print("\nThis asset is currently assigned to a user.")
+        print("Return the asset before retiring it.")
+        return
+
+    print(f"\nAsset: {asset['asset_id']}")
+    print(f"Device: {asset.get('brand', '')} {asset.get('model', '')}")
+    print(f"Serial Number: {asset.get('serial_number', '')}")
+    print(f"Current Status: {asset.get('status', 'Available')}")
+
+    confirm = input("Retire this asset? (yes/no): ").strip().lower()
+
+    if confirm not in ["yes", "y"]:
+        print("\nRetirement cancelled.")
+        return
+
+    timestamp = current_timestamp()
+
+    asset["status"] = "Retired"
+    asset["assigned_user"] = "Unassigned"
+    asset["department"] = "Unassigned"
+    asset["retired_at"] = timestamp
+    asset["updated_at"] = timestamp
+
+    save_assets()
+
+    print(f"\nAsset {asset['asset_id']} retired successfully.")
+
+
 assets = load_assets()
 
 
@@ -317,7 +430,9 @@ def main():
         print("3. Search Assets")
         print("4. Assign Asset to User")
         print("5. Return Asset")
-        print("6. Exit")
+        print("6. Update Asset")
+        print("7. Retire Asset")
+        print("8. Exit")
 
         choice = input("\nSelect an option: ").strip()
 
@@ -337,11 +452,17 @@ def main():
             return_asset()
 
         elif choice == "6":
+            update_asset()
+
+        elif choice == "7":
+            retire_asset()
+
+        elif choice == "8":
             print("\nExiting IT Asset Manager...")
             break
 
         else:
-            print("\nInvalid option. Please select 1-6.")
+            print("\nInvalid option. Please select 1-8.")
 
 
 if __name__ == "__main__":
