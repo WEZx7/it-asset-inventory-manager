@@ -1,5 +1,7 @@
 # Byte-compiled / optimized / DLL files
 assets.json
+it-*_report.txt
+asset_inventory_*.csv
 __pycache__/
 *.py[codz]
 *$py.class
