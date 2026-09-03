@@ -89,6 +89,31 @@ def serial_exists(serial_number, current_asset=None):
     return False
 
 
+def display_asset(asset):
+    print("\n--------------------------------")
+    print(f"Asset ID: {asset.get('asset_id', 'Unknown')}")
+    print(f"Type: {asset.get('type', 'Unknown')}")
+    print(f"Brand: {asset.get('brand', 'Unknown')}")
+    print(f"Model: {asset.get('model', 'Unknown')}")
+    print(f"Serial Number: {asset.get('serial_number', 'Unknown')}")
+    print(f"Status: {asset.get('status', 'Available')}")
+    print(f"Assigned User: {asset.get('assigned_user', 'Unassigned')}")
+    print(f"Department: {asset.get('department', 'Unassigned')}")
+    print(f"Location: {asset.get('location', 'Unknown')}")
+    print(f"Added: {asset.get('created_at', 'Unknown')}")
+
+    if asset.get("assigned_at"):
+        print(f"Assigned At: {asset['assigned_at']}")
+
+    if asset.get("returned_at"):
+        print(f"Last Returned: {asset['returned_at']}")
+
+    if asset.get("retired_at"):
+        print(f"Retired At: {asset['retired_at']}")
+
+    print(f"Last Updated: {asset.get('updated_at', 'Unknown')}")
+
+
 def add_asset():
     print("\n================================")
     print("           ADD ASSET")
@@ -123,7 +148,7 @@ def add_asset():
         "status": "Available",
         "assigned_user": "Unassigned",
         "department": "Unassigned",
-        "location": location,
+        "location": location if location else "Unknown",
         "created_at": timestamp,
         "updated_at": timestamp,
         "assigned_at": "",
@@ -135,31 +160,6 @@ def add_asset():
     save_assets()
 
     print(f"\nAsset {asset['asset_id']} added successfully.")
-
-
-def display_asset(asset):
-    print("\n--------------------------------")
-    print(f"Asset ID: {asset.get('asset_id', 'Unknown')}")
-    print(f"Type: {asset.get('type', 'Unknown')}")
-    print(f"Brand: {asset.get('brand', 'Unknown')}")
-    print(f"Model: {asset.get('model', 'Unknown')}")
-    print(f"Serial Number: {asset.get('serial_number', 'Unknown')}")
-    print(f"Status: {asset.get('status', 'Available')}")
-    print(f"Assigned User: {asset.get('assigned_user', 'Unassigned')}")
-    print(f"Department: {asset.get('department', 'Unassigned')}")
-    print(f"Location: {asset.get('location', 'Unknown')}")
-    print(f"Added: {asset.get('created_at', 'Unknown')}")
-
-    if asset.get("assigned_at"):
-        print(f"Assigned At: {asset['assigned_at']}")
-
-    if asset.get("returned_at"):
-        print(f"Last Returned: {asset['returned_at']}")
-
-    if asset.get("retired_at"):
-        print(f"Retired At: {asset['retired_at']}")
-
-    print(f"Last Updated: {asset.get('updated_at', 'Unknown')}")
 
 
 def view_assets():
@@ -184,7 +184,9 @@ def search_assets():
         print("\nNo assets available.")
         return
 
-    search_term = input("Enter Asset ID, serial number, brand, model, user, or type: ").strip().lower()
+    search_term = input(
+        "Enter Asset ID, serial number, brand, model, user, department, location, or type: "
+    ).strip().lower()
 
     if not search_term:
         print("\nSearch cannot be empty.")
@@ -286,6 +288,10 @@ def return_asset():
         print("\nAsset not found.")
         return
 
+    if asset.get("status") == "Retired":
+        print("\nA retired asset cannot be returned.")
+        return
+
     if asset.get("assigned_user", "Unassigned") == "Unassigned":
         print(f"\nAsset {asset['asset_id']} is not currently assigned.")
         return
@@ -346,20 +352,31 @@ def update_asset():
         print("\nAnother asset already uses this serial number.")
         return
 
-    if new_type:
+    changes = False
+
+    if new_type and new_type != asset.get("type"):
         asset["type"] = new_type
+        changes = True
 
-    if new_brand:
+    if new_brand and new_brand != asset.get("brand"):
         asset["brand"] = new_brand
+        changes = True
 
-    if new_model:
+    if new_model and new_model != asset.get("model"):
         asset["model"] = new_model
+        changes = True
 
-    if new_serial:
+    if new_serial and new_serial != asset.get("serial_number"):
         asset["serial_number"] = new_serial
+        changes = True
 
-    if new_location:
+    if new_location and new_location != asset.get("location"):
         asset["location"] = new_location
+        changes = True
+
+    if not changes:
+        print("\nNo changes were made.")
+        return
 
     asset["updated_at"] = current_timestamp()
 
@@ -417,6 +434,184 @@ def retire_asset():
     print(f"\nAsset {asset['asset_id']} retired successfully.")
 
 
+def filter_assets():
+    print("\n================================")
+    print("          FILTER ASSETS")
+    print("================================")
+
+    if not assets:
+        print("\nNo assets available.")
+        return
+
+    print("\nFilter by:")
+    print("1. Status")
+    print("2. Asset Type")
+    print("3. Department")
+    print("4. Location")
+
+    choice = input("\nSelect filter: ").strip()
+    results = []
+
+    if choice == "1":
+        print("\nStatus:")
+        print("1. Available")
+        print("2. In Use")
+        print("3. Retired")
+
+        status_choice = input("Select status: ").strip()
+
+        status_options = {
+            "1": "Available",
+            "2": "In Use",
+            "3": "Retired"
+        }
+
+        selected_status = status_options.get(status_choice)
+
+        if selected_status is None:
+            print("\nInvalid status.")
+            return
+
+        results = [
+            asset for asset in assets
+            if asset.get("status") == selected_status
+        ]
+
+    elif choice == "2":
+        asset_type = input("Enter Asset Type: ").strip().lower()
+
+        if not asset_type:
+            print("\nAsset type cannot be empty.")
+            return
+
+        results = [
+            asset for asset in assets
+            if asset_type in asset.get("type", "").lower()
+        ]
+
+    elif choice == "3":
+        department = input("Enter Department: ").strip().lower()
+
+        if not department:
+            print("\nDepartment cannot be empty.")
+            return
+
+        results = [
+            asset for asset in assets
+            if department in asset.get("department", "").lower()
+        ]
+
+    elif choice == "4":
+        location = input("Enter Location: ").strip().lower()
+
+        if not location:
+            print("\nLocation cannot be empty.")
+            return
+
+        results = [
+            asset for asset in assets
+            if location in asset.get("location", "").lower()
+        ]
+
+    else:
+        print("\nInvalid filter option.")
+        return
+
+    if not results:
+        print("\nNo assets match this filter.")
+        return
+
+    print(f"\nFound {len(results)} matching asset(s):")
+
+    for asset in results:
+        display_asset(asset)
+
+
+def asset_statistics():
+    print("\n================================")
+    print("        ASSET STATISTICS")
+    print("================================")
+
+    if not assets:
+        print("\nNo assets available.")
+        return
+
+    total_assets = len(assets)
+
+    available_count = 0
+    in_use_count = 0
+    retired_count = 0
+
+    assigned_count = 0
+    unassigned_count = 0
+
+    type_counts = {}
+    department_counts = {}
+    location_counts = {}
+
+    for asset in assets:
+        status = asset.get("status", "Available")
+        asset_type = asset.get("type", "Unknown")
+        department = asset.get("department", "Unassigned")
+        location = asset.get("location", "Unknown")
+
+        if status == "Available":
+            available_count += 1
+
+        elif status == "In Use":
+            in_use_count += 1
+
+        elif status == "Retired":
+            retired_count += 1
+
+        if asset.get("assigned_user", "Unassigned") == "Unassigned":
+            unassigned_count += 1
+        else:
+            assigned_count += 1
+
+        type_counts[asset_type] = type_counts.get(asset_type, 0) + 1
+        location_counts[location] = location_counts.get(location, 0) + 1
+
+        if department != "Unassigned":
+            department_counts[department] = department_counts.get(department, 0) + 1
+
+    print(f"\nTotal Assets: {total_assets}")
+
+    print("\nStatus:")
+    print(f"Available: {available_count}")
+    print(f"In Use: {in_use_count}")
+    print(f"Retired: {retired_count}")
+
+    print("\nAssignment:")
+    print(f"Assigned Assets: {assigned_count}")
+    print(f"Unassigned Assets: {unassigned_count}")
+
+    print("\nAsset Types:")
+
+    for asset_type, count in sorted(type_counts.items()):
+        print(f"{asset_type}: {count}")
+
+    print("\nLocations:")
+
+    for location, count in sorted(location_counts.items()):
+        print(f"{location}: {count}")
+
+    if department_counts:
+        print("\nDepartments:")
+
+        for department, count in sorted(department_counts.items()):
+            print(f"{department}: {count}")
+
+    active_assets = available_count + in_use_count
+
+    if total_assets > 0:
+        active_percentage = (active_assets / total_assets) * 100
+        utilization_rate = (in_use_count / total_assets) * 100
+
+        print(f"\nActive Asset Rate: {active_percentage:.1f}%")
+        print(f"Asset Utilization Rate: {utilization_rate:.1f}%")
+
+
 assets = load_assets()
 
 
@@ -432,7 +627,9 @@ def main():
         print("5. Return Asset")
         print("6. Update Asset")
         print("7. Retire Asset")
-        print("8. Exit")
+        print("8. Filter Assets")
+        print("9. Asset Statistics")
+        print("10. Exit")
 
         choice = input("\nSelect an option: ").strip()
 
@@ -458,11 +655,17 @@ def main():
             retire_asset()
 
         elif choice == "8":
+            filter_assets()
+
+        elif choice == "9":
+            asset_statistics()
+
+        elif choice == "10":
             print("\nExiting IT Asset Manager...")
             break
 
         else:
-            print("\nInvalid option. Please select 1-8.")
+            print("\nInvalid option. Please select 1-10.")
 
 
 if __name__ == "__main__":
