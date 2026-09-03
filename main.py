@@ -1,6 +1,6 @@
 import json
 import os
-from datetime import datetime
+from datetime import datetime, date
 
 
 ASSETS_FILE = "assets.json"
@@ -8,6 +8,73 @@ ASSETS_FILE = "assets.json"
 
 def current_timestamp():
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+
+def valid_date(date_string):
+    if not date_string:
+        return True
+
+    try:
+        datetime.strptime(date_string, "%Y-%m-%d")
+        return True
+    except ValueError:
+        return False
+
+
+def parse_date(date_string):
+    try:
+        return datetime.strptime(date_string, "%Y-%m-%d").date()
+    except (ValueError, TypeError):
+        return None
+
+
+def calculate_asset_age(purchase_date):
+    purchase = parse_date(purchase_date)
+
+    if purchase is None:
+        return "Unknown"
+
+    today = date.today()
+
+    if purchase > today:
+        return "Invalid purchase date"
+
+    months = (today.year - purchase.year) * 12 + (today.month - purchase.month)
+
+    if today.day < purchase.day:
+        months -= 1
+
+    years = months // 12
+    remaining_months = months % 12
+
+    if years > 0 and remaining_months > 0:
+        return f"{years} year(s), {remaining_months} month(s)"
+
+    if years > 0:
+        return f"{years} year(s)"
+
+    return f"{remaining_months} month(s)"
+
+
+def warranty_status(warranty_expiry):
+    expiry = parse_date(warranty_expiry)
+
+    if expiry is None:
+        return "Unknown"
+
+    today = date.today()
+    days_remaining = (expiry - today).days
+
+    if days_remaining < 0:
+        return "Expired"
+
+    if days_remaining == 0:
+        return "Expires Today"
+
+    if days_remaining <= 90:
+        return f"Expiring Soon ({days_remaining} days)"
+
+    return "Active"
 
 
 def add_history(asset, action):
@@ -40,6 +107,8 @@ def load_assets():
             asset.setdefault("assigned_at", "")
             asset.setdefault("returned_at", "")
             asset.setdefault("retired_at", "")
+            asset.setdefault("purchase_date", "Unknown")
+            asset.setdefault("warranty_expiry", "Unknown")
             asset.setdefault("history", [])
 
         return loaded_assets
@@ -100,6 +169,9 @@ def serial_exists(serial_number, current_asset=None):
 
 
 def display_asset(asset):
+    purchase_date = asset.get("purchase_date", "Unknown")
+    warranty_expiry = asset.get("warranty_expiry", "Unknown")
+
     print("\n--------------------------------")
     print(f"Asset ID: {asset.get('asset_id', 'Unknown')}")
     print(f"Type: {asset.get('type', 'Unknown')}")
@@ -110,6 +182,10 @@ def display_asset(asset):
     print(f"Assigned User: {asset.get('assigned_user', 'Unassigned')}")
     print(f"Department: {asset.get('department', 'Unassigned')}")
     print(f"Location: {asset.get('location', 'Unknown')}")
+    print(f"Purchase Date: {purchase_date}")
+    print(f"Asset Age: {calculate_asset_age(purchase_date)}")
+    print(f"Warranty Expiry: {warranty_expiry}")
+    print(f"Warranty Status: {warranty_status(warranty_expiry)}")
     print(f"Added: {asset.get('created_at', 'Unknown')}")
 
     if asset.get("assigned_at"):
@@ -134,6 +210,8 @@ def add_asset():
     model = input("Model: ").strip()
     serial_number = input("Serial Number: ").strip()
     location = input("Location: ").strip()
+    purchase_date = input("Purchase Date (YYYY-MM-DD): ").strip()
+    warranty_expiry = input("Warranty Expiry (YYYY-MM-DD): ").strip()
 
     if not asset_type:
         print("\nAsset type cannot be empty.")
@@ -147,6 +225,22 @@ def add_asset():
         print("\nAn asset with this serial number already exists.")
         return
 
+    if purchase_date and not valid_date(purchase_date):
+        print("\nInvalid purchase date. Use YYYY-MM-DD.")
+        return
+
+    if warranty_expiry and not valid_date(warranty_expiry):
+        print("\nInvalid warranty expiry date. Use YYYY-MM-DD.")
+        return
+
+    if purchase_date and warranty_expiry:
+        purchase = parse_date(purchase_date)
+        warranty = parse_date(warranty_expiry)
+
+        if warranty < purchase:
+            print("\nWarranty expiry cannot be before the purchase date.")
+            return
+
     timestamp = current_timestamp()
 
     asset = {
@@ -159,6 +253,8 @@ def add_asset():
         "assigned_user": "Unassigned",
         "department": "Unassigned",
         "location": location if location else "Unknown",
+        "purchase_date": purchase_date if purchase_date else "Unknown",
+        "warranty_expiry": warranty_expiry if warranty_expiry else "Unknown",
         "created_at": timestamp,
         "updated_at": timestamp,
         "assigned_at": "",
@@ -365,9 +461,29 @@ def update_asset():
     new_model = input(f"Model [{asset.get('model', '')}]: ").strip()
     new_serial = input(f"Serial Number [{asset.get('serial_number', '')}]: ").strip()
     new_location = input(f"Location [{asset.get('location', '')}]: ").strip()
+    new_purchase_date = input(f"Purchase Date [{asset.get('purchase_date', 'Unknown')}]: ").strip()
+    new_warranty_expiry = input(f"Warranty Expiry [{asset.get('warranty_expiry', 'Unknown')}]: ").strip()
 
     if new_serial and serial_exists(new_serial, asset):
         print("\nAnother asset already uses this serial number.")
+        return
+
+    if new_purchase_date and not valid_date(new_purchase_date):
+        print("\nInvalid purchase date. Use YYYY-MM-DD.")
+        return
+
+    if new_warranty_expiry and not valid_date(new_warranty_expiry):
+        print("\nInvalid warranty expiry date. Use YYYY-MM-DD.")
+        return
+
+    final_purchase_date = new_purchase_date if new_purchase_date else asset.get("purchase_date", "Unknown")
+    final_warranty_expiry = new_warranty_expiry if new_warranty_expiry else asset.get("warranty_expiry", "Unknown")
+
+    purchase = parse_date(final_purchase_date)
+    warranty = parse_date(final_warranty_expiry)
+
+    if purchase and warranty and warranty < purchase:
+        print("\nWarranty expiry cannot be before the purchase date.")
         return
 
     changes = []
@@ -396,6 +512,16 @@ def update_asset():
         old_value = asset.get("location", "Unknown")
         asset["location"] = new_location
         changes.append(f"Location changed from {old_value} to {new_location}")
+
+    if new_purchase_date and new_purchase_date != asset.get("purchase_date"):
+        old_value = asset.get("purchase_date", "Unknown")
+        asset["purchase_date"] = new_purchase_date
+        changes.append(f"Purchase date changed from {old_value} to {new_purchase_date}")
+
+    if new_warranty_expiry and new_warranty_expiry != asset.get("warranty_expiry"):
+        old_value = asset.get("warranty_expiry", "Unknown")
+        asset["warranty_expiry"] = new_warranty_expiry
+        changes.append(f"Warranty expiry changed from {old_value} to {new_warranty_expiry}")
 
     if not changes:
         print("\nNo changes were made.")
@@ -505,10 +631,7 @@ def filter_assets():
             print("\nInvalid status.")
             return
 
-        results = [
-            asset for asset in assets
-            if asset.get("status") == selected_status
-        ]
+        results = [asset for asset in assets if asset.get("status") == selected_status]
 
     elif choice == "2":
         asset_type = input("Enter Asset Type: ").strip().lower()
@@ -517,10 +640,7 @@ def filter_assets():
             print("\nAsset type cannot be empty.")
             return
 
-        results = [
-            asset for asset in assets
-            if asset_type in asset.get("type", "").lower()
-        ]
+        results = [asset for asset in assets if asset_type in asset.get("type", "").lower()]
 
     elif choice == "3":
         department = input("Enter Department: ").strip().lower()
@@ -529,10 +649,7 @@ def filter_assets():
             print("\nDepartment cannot be empty.")
             return
 
-        results = [
-            asset for asset in assets
-            if department in asset.get("department", "").lower()
-        ]
+        results = [asset for asset in assets if department in asset.get("department", "").lower()]
 
     elif choice == "4":
         location = input("Enter Location: ").strip().lower()
@@ -541,10 +658,7 @@ def filter_assets():
             print("\nLocation cannot be empty.")
             return
 
-        results = [
-            asset for asset in assets
-            if location in asset.get("location", "").lower()
-        ]
+        results = [asset for asset in assets if location in asset.get("location", "").lower()]
 
     else:
         print("\nInvalid filter option.")
@@ -577,6 +691,11 @@ def asset_statistics():
     assigned_count = 0
     unassigned_count = 0
 
+    active_warranty_count = 0
+    expiring_warranty_count = 0
+    expired_warranty_count = 0
+    unknown_warranty_count = 0
+
     type_counts = {}
     department_counts = {}
     location_counts = {}
@@ -601,6 +720,20 @@ def asset_statistics():
         else:
             assigned_count += 1
 
+        warranty = warranty_status(asset.get("warranty_expiry", "Unknown"))
+
+        if warranty == "Active":
+            active_warranty_count += 1
+
+        elif warranty.startswith("Expiring Soon") or warranty == "Expires Today":
+            expiring_warranty_count += 1
+
+        elif warranty == "Expired":
+            expired_warranty_count += 1
+
+        else:
+            unknown_warranty_count += 1
+
         type_counts[asset_type] = type_counts.get(asset_type, 0) + 1
         location_counts[location] = location_counts.get(location, 0) + 1
 
@@ -617,6 +750,12 @@ def asset_statistics():
     print("\nAssignment:")
     print(f"Assigned Assets: {assigned_count}")
     print(f"Unassigned Assets: {unassigned_count}")
+
+    print("\nWarranty:")
+    print(f"Active: {active_warranty_count}")
+    print(f"Expiring Soon: {expiring_warranty_count}")
+    print(f"Expired: {expired_warranty_count}")
+    print(f"Unknown: {unknown_warranty_count}")
 
     print("\nAsset Types:")
 
@@ -675,8 +814,72 @@ def view_asset_history():
     for entry in history:
         timestamp = entry.get("timestamp", "Unknown")
         action = entry.get("action", "Unknown activity")
-
         print(f"[{timestamp}] {action}")
+
+
+def warranty_alerts():
+    print("\n================================")
+    print("         WARRANTY ALERTS")
+    print("================================")
+
+    if not assets:
+        print("\nNo assets available.")
+        return
+
+    expired_assets = []
+    expiring_assets = []
+
+    today = date.today()
+
+    for asset in assets:
+        if asset.get("status") == "Retired":
+            continue
+
+        expiry = parse_date(asset.get("warranty_expiry"))
+
+        if expiry is None:
+            continue
+
+        days_remaining = (expiry - today).days
+
+        if days_remaining < 0:
+            expired_assets.append((asset, days_remaining))
+
+        elif days_remaining <= 90:
+            expiring_assets.append((asset, days_remaining))
+
+    expired_assets.sort(key=lambda item: item[1])
+    expiring_assets.sort(key=lambda item: item[1])
+
+    if not expired_assets and not expiring_assets:
+        print("\nNo warranty alerts.")
+        return
+
+    if expired_assets:
+        print("\nExpired Warranties:")
+
+        for asset, days_remaining in expired_assets:
+            expired_days = abs(days_remaining)
+
+            print("\n--------------------------------")
+            print(f"Asset ID: {asset['asset_id']}")
+            print(f"Device: {asset.get('brand', '')} {asset.get('model', '')}")
+            print(f"Warranty Expiry: {asset.get('warranty_expiry')}")
+            print(f"Expired {expired_days} day(s) ago")
+
+    if expiring_assets:
+        print("\nExpiring Within 90 Days:")
+
+        for asset, days_remaining in expiring_assets:
+            print("\n--------------------------------")
+            print(f"Asset ID: {asset['asset_id']}")
+            print(f"Device: {asset.get('brand', '')} {asset.get('model', '')}")
+            print(f"Warranty Expiry: {asset.get('warranty_expiry')}")
+
+            if days_remaining == 0:
+                print("Warranty expires today")
+            else:
+                print(f"Days Remaining: {days_remaining}")
 
 
 assets = load_assets()
@@ -697,7 +900,8 @@ def main():
         print("8. Filter Assets")
         print("9. Asset Statistics")
         print("10. View Asset History")
-        print("11. Exit")
+        print("11. Warranty Alerts")
+        print("12. Exit")
 
         choice = input("\nSelect an option: ").strip()
 
@@ -732,11 +936,14 @@ def main():
             view_asset_history()
 
         elif choice == "11":
+            warranty_alerts()
+
+        elif choice == "12":
             print("\nExiting IT Asset Manager...")
             break
 
         else:
-            print("\nInvalid option. Please select 1-11.")
+            print("\nInvalid option. Please select 1-12.")
 
 
 if __name__ == "__main__":
