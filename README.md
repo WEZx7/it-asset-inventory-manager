@@ -430,6 +430,24 @@ A typical IT asset workflow might look like this:
 10. Export inventory data for reporting
 ```
 
+## Screenshots
+
+### Main Menu
+
+![Main Menu](main-menu.png)
+
+### Asset Details
+
+![Asset Details](asset-details.png)
+
+### Asset History
+
+![Asset History](asset-history.png)
+
+### Warranty Alerts
+
+![Warranty Alerts](warranty-alerts.png)
+
 ## Project Purpose
 
 This project was created to practice Python programming while simulating practical IT asset management and IT support workflows.
