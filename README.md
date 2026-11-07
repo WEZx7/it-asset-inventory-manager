@@ -430,6 +430,17 @@ A typical IT asset workflow might look like this:
 10. Export inventory data for reporting
 ```
 
+## Running the Tests
+
+The core logic is covered by automated tests (`pytest`). They use a temporary data file, so your real data is never touched.
+
+```bash
+pip install -r requirements-dev.txt
+python -m pytest
+```
+
+Tests also run automatically on every push through GitHub Actions.
+
 ## Screenshots
 
 ### Main Menu
